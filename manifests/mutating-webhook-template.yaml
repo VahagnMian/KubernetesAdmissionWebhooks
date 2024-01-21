@@ -1,9 +1,9 @@
 apiVersion: admissionregistration.k8s.io/v1
 kind: MutatingWebhookConfiguration
 metadata:
-  name: mutating-webhook-simple
+  name: mutating-webhook-add-deletion-protection
 webhooks:
-  - name: example-webhook.webhook.svc.cluster.local
+  - name: mutating.webhook.k8s.com
     admissionReviewVersions:
       - "v1beta1"
     sideEffects: "None"
@@ -14,7 +14,7 @@ webhooks:
     clientConfig:
       url: "https://192.168.11.80:8443/mutate"
 #      service:
-#        name: example-webhook
+#        name: webhook
 #        namespace: webhook
 #        path: "/mutate"
       caBundle: "${CA_PEM_B64}"

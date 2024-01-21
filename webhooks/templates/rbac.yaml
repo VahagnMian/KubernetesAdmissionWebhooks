@@ -1,0 +1,23 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: webhook
+  namespace: webhook
+rules:
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "watch", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: webhook
+  namespace: webhook
+subjects:
+  - kind: ServiceAccount
+    name: webhook
+    namespace: default
+roleRef:
+  kind: ClusterRole
+  name: webhook
+  apiGroup: rbac.authorization.k8s.io
