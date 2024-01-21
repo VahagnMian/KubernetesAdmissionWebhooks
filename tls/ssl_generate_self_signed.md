@@ -1,7 +1,6 @@
 # Generate certificates
 
 ```
-
 cd ./MutatingWebhookSimple
 
 docker run -it --rm -v ${PWD}:/work -w /work debian bash
