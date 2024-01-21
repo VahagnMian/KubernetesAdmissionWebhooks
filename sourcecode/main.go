@@ -3,19 +3,20 @@ package main
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
+	admissionv1 "k8s.io/api/admission/v1"
 	v1 "k8s.io/api/admission/v1"
 	"k8s.io/api/admission/v1beta1"
+	apiv1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
-	"log"
-	"net/http"
-
-	"fmt"
-	apiv1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/kubernetes"
 	rest "k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/util/homedir"
+	"log"
+	"net/http"
 	"os"
 	"path/filepath"
 
@@ -51,9 +52,18 @@ func main() {
 	kubeConfigFilePath := os.Getenv("KUBECONFIG")
 
 	flag.IntVar(&parameters.port, "port", 8443, "Webhook server port.")
-	flag.StringVar(&parameters.certFile, "tlsCertFile", "/etc/webhook/certs/tls.crt", "File containing the x509 Certificate for HTTPS.")
-	flag.StringVar(&parameters.keyFile, "tlsKeyFile", "/etc/webhook/certs/tls.key", "File containing the x509 private key to --tlsCertFile.")
-	flag.Parse()
+
+	fmt.Println("Use kubeconfig value", useKubeConfig)
+	if useKubeConfig == "true" {
+		fmt.Println("Using local certs")
+		flag.StringVar(&parameters.certFile, "tlsCertFile", "../tls/local-dev-certs/tls.crt", "File containing the x509 Certificate for HTTPS.")
+		flag.StringVar(&parameters.keyFile, "tlsKeyFile", "../tls/local-dev-certs/tls.key", "File containing the x509 private key to --tlsCertFile.")
+		flag.Parse()
+	} else {
+		flag.StringVar(&parameters.certFile, "tlsCertFile", "/etc/webhook/certs/tls.crt", "File containing the x509 Certificate for HTTPS.")
+		flag.StringVar(&parameters.keyFile, "tlsKeyFile", "/etc/webhook/certs/tls.key", "File containing the x509 private key to --tlsCertFile.")
+		flag.Parse()
+	}
 
 	if len(useKubeConfig) == 0 {
 		// default to service account in cluster token
@@ -68,7 +78,7 @@ func main() {
 
 		if kubeConfigFilePath == "" {
 			if home := homedir.HomeDir(); home != "" {
-				kubeconfig = filepath.Join(home, ".kube", "config")
+				kubeconfig = filepath.Join("/Users/vahagn/", ".kube", "config31")
 			}
 		} else {
 			kubeconfig = kubeConfigFilePath
@@ -92,6 +102,7 @@ func main() {
 	test()
 	http.HandleFunc("/", HandleRoot)
 	http.HandleFunc("/mutate", HandleMutate)
+	http.HandleFunc("/validate", HandleValidate)
 	log.Fatal(http.ListenAndServeTLS(":"+strconv.Itoa(parameters.port), parameters.certFile, parameters.keyFile, nil))
 }
 
@@ -125,13 +136,10 @@ func HandleMutate(w http.ResponseWriter, r *http.Request) {
 		admissionReviewReq.Request.Name,
 	)
 
-	// Declaring pod as we are gonna mutate pod
 	var pod apiv1.Pod
 
-	// unmarshalling request from API server to patch
 	err = json.Unmarshal(admissionReviewReq.Request.Object.Raw, &pod)
 
-	// Check if unmarshalling returns error or not
 	if err != nil {
 		fmt.Errorf("could not unmarshal pod on admission request: %v", err)
 	}
@@ -139,7 +147,9 @@ func HandleMutate(w http.ResponseWriter, r *http.Request) {
 	var patches []patchOperation
 
 	labels := pod.ObjectMeta.Labels
-	labels["example-webhook"] = "it-worked"
+	if pod.Namespace == "prod" {
+		labels["deletion-protection"] = "true"
+	}
 
 	patches = append(patches, patchOperation{
 		Op:    "add",
@@ -158,7 +168,6 @@ func HandleMutate(w http.ResponseWriter, r *http.Request) {
 			Allowed: true,
 		},
 	}
-
 	admissionReviewResponse.Response.Patch = patchBytes
 
 	bytes, err := json.Marshal(&admissionReviewResponse)
@@ -166,6 +175,76 @@ func HandleMutate(w http.ResponseWriter, r *http.Request) {
 		fmt.Errorf("marshaling response: %v", err)
 	}
 
+	w.Write(bytes)
+
+}
+
+func HandleValidate(w http.ResponseWriter, r *http.Request) {
+
+	input := admissionv1.AdmissionReview{}
+
+	body, err := ioutil.ReadAll(r.Body)
+	fmt.Println(string(body))
+	err = ioutil.WriteFile("/tmp/request", body, 0644)
+	if err != nil {
+		panic(err.Error())
+	}
+
+	if _, _, err := universalDeserializer.Decode(body, nil, &input); err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		fmt.Errorf("could not deserialize request: %v", err)
+	} else if input.Request == nil {
+		w.WriteHeader(http.StatusBadRequest)
+		errors.New("malformed admission review: request is nil")
+	}
+
+	operation := input.Request.Operation
+	var pod apiv1.Pod
+	var isAllowed bool
+	var Message string
+
+	// unmarshalling request from API server to patch
+	err = json.Unmarshal(input.Request.OldObject.Raw, &pod)
+	fmt.Println("Request: ", input.Request.Object)
+
+	labels := pod.ObjectMeta.Labels
+	fmt.Println(labels)
+	if labels["deletion-protection"] == "true" && operation == "DELETE" {
+		isAllowed = false
+		Message = "Deletion allowed on this object"
+	} else {
+		isAllowed = true
+		Message = "Deletion not allowed on this object"
+	}
+
+	fmt.Println("Called", operation, "on", input.Request.Name, "kind of", input.Request.Kind)
+
+	err = json.Unmarshal(input.Request.Object.Raw, &operation)
+
+	if err != nil {
+		fmt.Errorf("Could not unmarshal pod on admission request: %v", err)
+	}
+
+	output := admissionv1.AdmissionReview{
+
+		Response: &admissionv1.AdmissionResponse{
+			UID:     input.Request.UID,
+			Allowed: isAllowed,
+			Result: &metav1.Status{
+				Message: Message,
+			},
+		},
+	}
+
+	output.TypeMeta.Kind = input.TypeMeta.Kind
+	output.TypeMeta.APIVersion = input.TypeMeta.APIVersion
+
+	bytes, err := json.Marshal(output)
+	if err != nil {
+		fmt.Errorf("marshaling response: %v", err)
+	}
+
+	fmt.Println(string(bytes))
 	w.Write(bytes)
 
 }
