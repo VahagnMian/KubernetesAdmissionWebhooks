@@ -1,0 +1,7 @@
+controller:
+  image:
+    registry: "docker"
+    name: "webhook"
+    tag: "v1.0.0"
+
+
