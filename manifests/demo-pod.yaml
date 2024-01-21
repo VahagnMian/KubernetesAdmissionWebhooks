@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: demo-pod
+  namespace: frs
+  labels:
+    deletion-protection: "true"
+    example-webhook-enabled: "true"
+spec:
+  containers:
+  - name: nginx
+    image: nginx
