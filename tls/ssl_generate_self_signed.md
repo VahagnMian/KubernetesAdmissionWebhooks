@@ -19,7 +19,7 @@ cfssl gencert \
   -ca=/tmp/ca.pem \
   -ca-key=/tmp/ca-key.pem \
   -config=./tls/ca-config.json \
-  -hostname="example-webhook,example-webhook.webhook.svc.cluster.local,example-webhook.webhook.svc,localhost,127.0.0.1" \
+  -hostname="webhook,webhook.webhook.svc.cluster.local,webhook.webhook.svc,localhost,127.0.0.1" \
   -profile=default \
   ./tls/ca-csr.json | cfssljson -bare /tmp/example-webhook
 
