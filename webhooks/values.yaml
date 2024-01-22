@@ -3,5 +3,7 @@ controller:
     registry: "docker"
     name: "webhook"
     tag: "v1.0.0"
+  env:
+    TARGET_NAMEPSACE: prod
 
 
