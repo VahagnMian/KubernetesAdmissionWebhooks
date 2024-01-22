@@ -53,8 +53,8 @@ func main() {
 
 	flag.IntVar(&parameters.port, "port", 8443, "Webhook server port.")
 
-	fmt.Println("Use kubeconfig value", useKubeConfig)
 	if useKubeConfig == "true" {
+		fmt.Println("Using Kubeconfig")
 		fmt.Println("Using local certs")
 		flag.StringVar(&parameters.certFile, "tlsCertFile", "../tls/local-dev-certs/tls.crt", "File containing the x509 Certificate for HTTPS.")
 		flag.StringVar(&parameters.keyFile, "tlsKeyFile", "../tls/local-dev-certs/tls.key", "File containing the x509 private key to --tlsCertFile.")
@@ -147,7 +147,7 @@ func HandleMutate(w http.ResponseWriter, r *http.Request) {
 	var patches []patchOperation
 
 	labels := pod.ObjectMeta.Labels
-	if pod.Namespace == "prod" {
+	if pod.Namespace == getenv("TARGET_NAMESPACE", "prod") {
 		labels["deletion-protection"] = "true"
 	}
 
@@ -209,12 +209,12 @@ func HandleValidate(w http.ResponseWriter, r *http.Request) {
 
 	labels := pod.ObjectMeta.Labels
 	fmt.Println(labels)
-	if labels["deletion-protection"] == "true" && operation == "DELETE" {
+	if labels["deletion-protection"] == "true" && operation == "DELETE" && pod.Namespace == getenv("TARGET_NAMESPACE", "prod") {
 		isAllowed = false
-		Message = "Deletion allowed on this object"
+		Message = "Deletion not allowed on this object"
 	} else {
 		isAllowed = true
-		Message = "Deletion not allowed on this object"
+		Message = "Deletion allowed on this object"
 	}
 
 	fmt.Println("Called", operation, "on", input.Request.Name, "kind of", input.Request.Kind)
