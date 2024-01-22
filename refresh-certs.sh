@@ -6,7 +6,7 @@ cfssl gencert \
   -ca=/tmp/ca.pem \
   -ca-key=/tmp/ca-key.pem \
   -config=./tls/ca-config.json \
-  -hostname="example-webhook,example-webhook.webhook.svc.cluster.local,example-webhook.webhook.svc,localhost,127.0.0.1,192.168.11.80" \
+  -hostname="webhook,webhook.webhook.svc.cluster.local,webhook.webhook.svc,localhost,127.0.0.1,192.168.11.80" \
   -profile=default \
   ./tls/ca-csr.json | cfssljson -bare /tmp/example-webhook
 
@@ -17,7 +17,8 @@ cat <<EOF > ./webhooks/templates/webhook-tls-secret.yaml
 apiVersion: v1
 kind: Secret
 metadata:
-  name: example-webhook-tls
+  name: webhook-tls
+  namespace: webhook
 type: Opaque
 data:
   tls.crt: $(cat /tmp/example-webhook.pem | base64 | tr -d '\n')
