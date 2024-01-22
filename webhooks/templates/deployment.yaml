@@ -1,0 +1,46 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: webhook
+  namespace: webhook
+  labels:
+    app: webhook
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: webhook
+  template:
+    metadata:
+      labels:
+        app: webhook
+    spec:
+      nodeSelector:
+        kubernetes.io/os: linux
+      serviceAccountName: webhook
+      containers:
+        - name: server
+          image: "{{ with .Values.controller.image -}}
+                    {{- .registry -}}
+                    /{{- .name -}}
+                    :{{- .tag -}}
+                    {{- end }}"
+          imagePullPolicy: {{ .Values.controller.image.pullPolicy }}
+          env:
+            {{- range $key, $value := .Values.controller.env }}
+            - name: {{ $key |  quote }}
+              value: {{ $value | quote }}
+              {{- end }}
+          ports:
+            - containerPort: 8443
+              name: tls
+            - containerPort: 80
+              name: metrics
+          volumeMounts:
+            - name: webhook-tls-certs
+              mountPath: /etc/webhook/certs/
+              readOnly: true
+      volumes:
+        - name: webhook-tls-certs
+          secret:
+            secretName: webhook-tls
