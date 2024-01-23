@@ -7,12 +7,12 @@ import (
 )
 
 func test() {
-	pods, err := clientSet.CoreV1().Pods("default").List(context.TODO(), metav1.ListOptions{})
+	_, err := clientSet.CoreV1().Pods("kube-system").List(context.TODO(), metav1.ListOptions{})
 
 	if err != nil {
-		fmt.Println("Error happend")
+		fmt.Println("Error happened")
 		panic(err.Error())
 	}
 
-	fmt.Printf("There are %d pods in the cluster\n", len(pods.Items))
+	fmt.Println("Authentication to API server succeeded")
 }
