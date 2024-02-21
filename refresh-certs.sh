@@ -10,6 +10,7 @@ cfssl gencert \
   -profile=default \
   ./tls/ca-csr.json | cfssljson -bare /tmp/example-webhook
 
+mkdir -p ./tls/local-dev-certs
 cat /tmp/example-webhook.pem > ./tls/local-dev-certs/tls.crt
 cat /tmp/example-webhook-key.pem > ./tls/local-dev-certs/tls.key
 

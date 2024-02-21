@@ -3,7 +3,9 @@ package main
 import (
 	"encoding/json"
 	"errors"
+	"flag"
 	"fmt"
+	"io/ioutil"
 	admissionv1 "k8s.io/api/admission/v1"
 	v1 "k8s.io/api/admission/v1"
 	"k8s.io/api/admission/v1beta1"
@@ -19,9 +21,6 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-
-	"flag"
-	"io/ioutil"
 	"strconv"
 )
 
@@ -52,7 +51,7 @@ func main() {
 	kubeConfigFilePath := os.Getenv("KUBECONFIG")
 
 	flag.IntVar(&parameters.port, "port", 8443, "Webhook server port.")
-  
+
 	if useKubeConfig == "true" {
 		fmt.Println("Using Kubeconfig")
 		fmt.Println("Using local certs")
@@ -78,7 +77,7 @@ func main() {
 
 		if kubeConfigFilePath == "" {
 			if home := homedir.HomeDir(); home != "" {
-				kubeconfig = filepath.Join("/Users/vahagn/", ".kube", "config31")
+				kubeconfig = filepath.Join("/Users/vahagn/", ".kube", "11-31.yaml")
 			}
 		} else {
 			kubeconfig = kubeConfigFilePath
@@ -111,6 +110,7 @@ func HandleRoot(w http.ResponseWriter, r *http.Request) {
 }
 
 func HandleMutate(w http.ResponseWriter, r *http.Request) {
+	fmt.Println("-> Mutation webhook called")
 	body, err := ioutil.ReadAll(r.Body)
 	err = ioutil.WriteFile("/tmp/request", body, 0644)
 	if err != nil {
@@ -122,12 +122,13 @@ func HandleMutate(w http.ResponseWriter, r *http.Request) {
 	if _, _, err := universalDeserializer.Decode(body, nil, &admissionReviewReq); err != nil {
 		// check if decoder returnes any error
 		w.WriteHeader(http.StatusBadRequest)
-		fmt.Errorf("could not deserialize request: %v", err)
+		fmt.Errorf("Could not deserialize request: %v", err)
 	} else if admissionReviewReq.Request == nil {
 		// Check if Request from API server is nil or not
 		w.WriteHeader(http.StatusBadRequest)
-		errors.New("malformed admission review: request is nil")
+		errors.New("Malformed admission review: request is nil")
 	}
+	fmt.Println("Successfully deserialized request fro MUTATION from API server")
 
 	// Print logs for webhook
 	fmt.Printf("Type: %v \t Event: %v \t Name: %v \n",
@@ -159,7 +160,7 @@ func HandleMutate(w http.ResponseWriter, r *http.Request) {
 
 	patchBytes, err := json.Marshal(patches)
 	if err != nil {
-		fmt.Errorf("could not marshal JSON patch: %v", err)
+		fmt.Errorf("Could not marshal JSON patch: %v", err)
 	}
 
 	admissionReviewResponse := v1beta1.AdmissionReview{
@@ -175,16 +176,18 @@ func HandleMutate(w http.ResponseWriter, r *http.Request) {
 		fmt.Errorf("marshaling response: %v", err)
 	}
 
-	w.Write(bytes)
+	_, err1 := w.Write(bytes)
+	if err1 != nil {
+		fmt.Errorf("Got error during responding to API server")
+	}
 
 }
 
 func HandleValidate(w http.ResponseWriter, r *http.Request) {
-
+	fmt.Println("-> Validation webhook called")
 	input := admissionv1.AdmissionReview{}
 
 	body, err := ioutil.ReadAll(r.Body)
-	fmt.Println(string(body))
 	err = ioutil.WriteFile("/tmp/request", body, 0644)
 	if err != nil {
 		panic(err.Error())
@@ -205,10 +208,10 @@ func HandleValidate(w http.ResponseWriter, r *http.Request) {
 
 	// unmarshalling request from API server to patch
 	err = json.Unmarshal(input.Request.OldObject.Raw, &pod)
-	fmt.Println("Request: ", input.Request.Object)
+	//fmt.Println("Request: ", input.Request.Object)
 
 	labels := pod.ObjectMeta.Labels
-	fmt.Println(labels)
+	fmt.Println()
 	if labels["deletion-protection"] == "true" && operation == "DELETE" && pod.Namespace == getenv("TARGET_NAMESPACE", "prod") {
 		isAllowed = false
 		Message = "Deletion not allowed on this object"
@@ -244,7 +247,6 @@ func HandleValidate(w http.ResponseWriter, r *http.Request) {
 		fmt.Errorf("marshaling response: %v", err)
 	}
 
-	fmt.Println(string(bytes))
 	w.Write(bytes)
 
 }
