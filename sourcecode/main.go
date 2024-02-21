@@ -109,7 +109,7 @@ func HandleRoot(w http.ResponseWriter, r *http.Request) {
 }
 
 func HandleMutate(w http.ResponseWriter, r *http.Request) {
-	logger.Info().Msg("-> Mutation webhook called")
+	logger.Info().Msg("Mutation webhook called")
 	body, err := ioutil.ReadAll(r.Body)
 	err = ioutil.WriteFile("/tmp/request", body, 0644)
 	if err != nil {
