@@ -12,11 +12,7 @@ webhooks:
         resources: ["pods"]
         scope: "Namespaced"
     clientConfig:
-       url: "https://192.168.11.80:8443/validate"
-#      service:
-#        name: example-webhook
-#        namespace: webhook
-#        path: "/validate"
-       caBundle: "${CA_PEM_B64}"
+      url: "https://192.168.11.80:8443/validate"
+      caBundle: "${CA_PEM_B64}"
     admissionReviewVersions: ["v1", "v1beta1"]
     timeoutSeconds: 5

@@ -8,15 +8,11 @@ webhooks:
       - "v1beta1"
     sideEffects: "None"
     timeoutSeconds: 30
-    objectSelector:
+    namespaceSelector:
       matchLabels:
-        example-webhook-enabled: "true"
+        enable-deletion-protection: "true"
     clientConfig:
       url: "https://192.168.11.80:8443/mutate"
-#      service:
-#        name: webhook
-#        namespace: webhook
-#        path: "/mutate"
       caBundle: "${CA_PEM_B64}"
     rules:
       - operations: [ "CREATE" ]
