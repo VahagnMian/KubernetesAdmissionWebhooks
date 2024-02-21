@@ -5,6 +5,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	logger "github.com/rs/zerolog/log"
 	"io/ioutil"
 	admissionv1 "k8s.io/api/admission/v1"
 	v1 "k8s.io/api/admission/v1"
@@ -16,12 +17,12 @@ import (
 	"k8s.io/client-go/kubernetes"
 	rest "k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
-	"k8s.io/client-go/util/homedir"
 	"log"
 	"net/http"
 	"os"
-	"path/filepath"
 	"strconv"
+	"strings"
+	_ "time"
 )
 
 var config *rest.Config
@@ -47,14 +48,20 @@ var (
 
 func main() {
 
-	useKubeConfig := os.Getenv("USE_KUBECONFIG")
-	kubeConfigFilePath := os.Getenv("KUBECONFIG")
+	var useKubeConfig bool
+
+	if len(os.Getenv("KUBECONFIG")) > 0 {
+		useKubeConfig = true
+	} else {
+		useKubeConfig = false
+	}
 
 	flag.IntVar(&parameters.port, "port", 8443, "Webhook server port.")
 
-	if useKubeConfig == "true" {
+	if useKubeConfig {
 		fmt.Println("Using Kubeconfig")
-		fmt.Println("Using local certs")
+		logger.Info().Msg("Using kubeconfig")
+		logger.Info().Msg("Using local certificates")
 		flag.StringVar(&parameters.certFile, "tlsCertFile", "../tls/local-dev-certs/tls.crt", "File containing the x509 Certificate for HTTPS.")
 		flag.StringVar(&parameters.keyFile, "tlsKeyFile", "../tls/local-dev-certs/tls.key", "File containing the x509 private key to --tlsCertFile.")
 		flag.Parse()
@@ -64,7 +71,7 @@ func main() {
 		flag.Parse()
 	}
 
-	if len(useKubeConfig) == 0 {
+	if !useKubeConfig {
 		// default to service account in cluster token
 		c, err := rest.InClusterConfig()
 		if err != nil {
@@ -72,20 +79,10 @@ func main() {
 		}
 		config = c
 	} else {
-		//load from a kube config
-		var kubeconfig string
+		logger.Info().Msg("Using Kubeconfig file instead of serviceAccount to authenticate to API server, as there is environment variable...")
 
-		if kubeConfigFilePath == "" {
-			if home := homedir.HomeDir(); home != "" {
-				kubeconfig = filepath.Join("/Users/vahagn/", ".kube", "11-31.yaml")
-			}
-		} else {
-			kubeconfig = kubeConfigFilePath
-		}
+		c, err := clientcmd.BuildConfigFromFlags("", os.Getenv("KUBECONFIG"))
 
-		fmt.Println("kubeconfig: " + kubeconfig)
-
-		c, err := clientcmd.BuildConfigFromFlags("", kubeconfig)
 		if err != nil {
 			panic(err.Error())
 		}
@@ -98,7 +95,9 @@ func main() {
 	}
 	clientSet = cs
 
-	test()
+	kubeAPIVersion, _ := cs.ServerVersion()
+	logger.Info().Msg("Kube API version: " + kubeAPIVersion.String())
+	logger.Info().Msg("Authentication to Kube API server succeeded")
 	http.HandleFunc("/", HandleRoot)
 	http.HandleFunc("/mutate", HandleMutate)
 	http.HandleFunc("/validate", HandleValidate)
@@ -110,7 +109,7 @@ func HandleRoot(w http.ResponseWriter, r *http.Request) {
 }
 
 func HandleMutate(w http.ResponseWriter, r *http.Request) {
-	fmt.Println("-> Mutation webhook called")
+	logger.Info().Msg("Mutation webhook called")
 	body, err := ioutil.ReadAll(r.Body)
 	err = ioutil.WriteFile("/tmp/request", body, 0644)
 	if err != nil {
@@ -128,7 +127,7 @@ func HandleMutate(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
 		errors.New("Malformed admission review: request is nil")
 	}
-	fmt.Println("Successfully deserialized request fro MUTATION from API server")
+	fmt.Println("Successfully deserialized request for MUTATION from API server")
 
 	// Print logs for webhook
 	fmt.Printf("Type: %v \t Event: %v \t Name: %v \n",
@@ -142,7 +141,7 @@ func HandleMutate(w http.ResponseWriter, r *http.Request) {
 	err = json.Unmarshal(admissionReviewReq.Request.Object.Raw, &pod)
 
 	if err != nil {
-		fmt.Errorf("could not unmarshal pod on admission request: %v", err)
+		logger.Error().AnErr("could not unmarshal pod on admission request: ", err)
 	}
 
 	var patches []patchOperation
@@ -160,7 +159,7 @@ func HandleMutate(w http.ResponseWriter, r *http.Request) {
 
 	patchBytes, err := json.Marshal(patches)
 	if err != nil {
-		fmt.Errorf("Could not marshal JSON patch: %v", err)
+		logger.Error().AnErr("Could not marshal JSON patch: ", err)
 	}
 
 	admissionReviewResponse := v1beta1.AdmissionReview{
@@ -173,18 +172,18 @@ func HandleMutate(w http.ResponseWriter, r *http.Request) {
 
 	bytes, err := json.Marshal(&admissionReviewResponse)
 	if err != nil {
-		fmt.Errorf("marshaling response: %v", err)
+		logger.Error().AnErr("marshaling response: %v", err)
 	}
 
 	_, err1 := w.Write(bytes)
 	if err1 != nil {
-		fmt.Errorf("Got error during responding to API server")
+		logger.Error().AnErr("Got error during responding to API server", err1)
 	}
 
 }
 
 func HandleValidate(w http.ResponseWriter, r *http.Request) {
-	fmt.Println("-> Validation webhook called")
+	logger.Info().Msg("Validation webhook called")
 	input := admissionv1.AdmissionReview{}
 
 	body, err := ioutil.ReadAll(r.Body)
@@ -195,7 +194,7 @@ func HandleValidate(w http.ResponseWriter, r *http.Request) {
 
 	if _, _, err := universalDeserializer.Decode(body, nil, &input); err != nil {
 		w.WriteHeader(http.StatusBadRequest)
-		fmt.Errorf("could not deserialize request: %v", err)
+		logger.Error().AnErr("could not deserialize request: %v", err)
 	} else if input.Request == nil {
 		w.WriteHeader(http.StatusBadRequest)
 		errors.New("malformed admission review: request is nil")
@@ -220,7 +219,9 @@ func HandleValidate(w http.ResponseWriter, r *http.Request) {
 		Message = "Deletion allowed on this object"
 	}
 
-	fmt.Println("Called", operation, "on", input.Request.Name, "kind of", input.Request.Kind)
+	msg := joinStrings(" ", "Called", "Operation:", string(operation), "on", input.Request.Name, "kind of", input.Request.Kind.Kind)
+
+	logger.Info().Msgf(msg)
 
 	err = json.Unmarshal(input.Request.Object.Raw, &operation)
 
@@ -244,9 +245,13 @@ func HandleValidate(w http.ResponseWriter, r *http.Request) {
 
 	bytes, err := json.Marshal(output)
 	if err != nil {
-		fmt.Errorf("marshaling response: %v", err)
+		logger.Error().AnErr("marshaling response: %v", err)
 	}
 
 	w.Write(bytes)
 
+}
+
+func joinStrings(separator string, elements ...string) string {
+	return strings.Join(elements, separator)
 }
