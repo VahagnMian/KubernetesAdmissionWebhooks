@@ -5,14 +5,20 @@ metadata:
 webhooks:
   - name: validating.webhook.k8s.com
     sideEffects: None
+    namespaceSelector:
+      matchLabels:
+        enable-deletion-protection: "true"
     rules:
       - apiGroups: [""]
         apiVersions: ["v1"]
-        operations: ["CREATE", "UPDATE", "DELETE"]
+        operations: ["DELETE"]
         resources: ["pods"]
         scope: "Namespaced"
     clientConfig:
-      url: "https://192.168.11.80:8443/validate"
+      service:
+        name: webhook
+        namespace: webhook
+        path: "/validate"
       caBundle: "${CA_PEM_B64}"
     admissionReviewVersions: ["v1", "v1beta1"]
     timeoutSeconds: 5
