@@ -3,6 +3,7 @@ REGISTRY=vahagnmian
 REPO=webhook
 VERSION=v1.0.0
 LOCAL_IP=""
+NAMESPACE=webhooks
 MUTATING_MANIFEST_FILE=./manifests/mutating-webhook-template.yaml
 VALIDATING_MANIFEST_FILE=./manifests/validating-webhook-template.yaml
 
@@ -54,14 +55,14 @@ run:
 	go run ./
 
 deploy: refresh-certs
-	helm upgrade --install webhooks -n default -f ./webhooks/values.yaml  \
+	helm upgrade --install webhooks -n ${NAMESPACE} -f ./webhooks/values.yaml  \
 		--set controller.image.registry="${REGISTRY}" \
 		--set controller.image.repo="${REPO}" \
 		--set controller.image.tag="${VERSION}" ./webhooks/.
 	make modify-manifest
 
 cleanup:
-	helm uninstall webhooks -n default
+	helm uninstall webhooks -n ${NAMESPACE}
 	rm -r ./webhooks/templates/mutating-webhook.yaml
 	rm -r ./webhooks/templates/validating-webhook.yaml
 	rm -r ./webhooks/templates/webhook-tls-secret.yaml
