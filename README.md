@@ -1,8 +1,8 @@
-# Kubernetes Admission Webhooks
+# Deletion protection with Kubernetes Admission Webhooks
+Medium [story](https://medium.com/@vahagn.mian/how-kubernetes-admission-webhooks-work-building-deletion-protection-3c19e66f7ad1)
 
-## TL;DR
 
-## Build
+### Build
 
 ```bash
 # For development, and debugging purposes
@@ -12,7 +12,7 @@ make build-dev REGISTRY=<my-registry> REPO=webhook VERSION=v1.0.1-dev
 make build-prod REGISTRY=<my-registry> REPO=webhook VERSION=v1.0.4
 ```
 
-## Deploy
+### Deploy
 This command will deploy helm chart which contains everything that you need to run for controller
 
 This will automatically create, refresh, and replace certificates, and will also replace the template files to helm chart
@@ -21,7 +21,7 @@ kubectl create ns webhooks
 make deploy REGISTRY=<registry> NAMESPACE=webhooks REPO=webhook VERSION=v1.0.4
 ```
 
-## Development
+### Development
 For development purposes you can deploy this way, specifying the IP address your webhook should send requests to
 
 This will automatically modify your manifests
